@@ -21,12 +21,15 @@ namespace MvcMovie.Controllers
 
         // GET: Movies
         // GET: Movies
-        public async Task<IActionResult> Index(string movieGenre, string searchString)
+        public async Task<IActionResult> Index(int? movieGenre, string searchString, string sortOrder)
         {
+            // Sort the data by release date, ascending or descending
+            ViewData["DateSort"] = sortOrder == "ReleaseDate" ? "ReleaseDate_desc" : "ReleaseDate";
+
             // Use LINQ to get list of genres.
-            IQueryable<string> genreQuery = from m in _context.Movie
-                                            orderby m.Genre
-                                            select m.Genre;
+            IQueryable<Genre> genreQuery = from g in _context.Genre
+                                           orderby g.GenreName
+                                           select g;
 
             var movies = from m in _context.Movie
                          select m;
@@ -36,14 +39,28 @@ namespace MvcMovie.Controllers
                 movies = movies.Where(s => s.Title.Contains(searchString));
             }
 
-            if (!string.IsNullOrEmpty(movieGenre))
+            if (movieGenre != null)
             {
-                movies = movies.Where(x => x.Genre == movieGenre);
+                movies = movies.Where(x => x.GenreId == movieGenre);
+            }
+
+            if (!string.IsNullOrEmpty(sortOrder))
+            {
+                switch (sortOrder)
+                {
+                    default:
+                    case "ReleaseDate":
+                        movies = movies.OrderBy(m => m.ReleaseDate);
+                        break;
+                    case "ReleaseDate_desc":
+                        movies = movies.OrderByDescending(m => m.ReleaseDate);
+                        break;
+                }
             }
 
             var movieGenreVM = new MovieGenreViewModel
             {
-                Genres = new SelectList(await genreQuery.Distinct().ToListAsync()),
+                Genres = new SelectList(await genreQuery.Distinct().ToListAsync(), "GenreId", "GenreName"),
                 Movies = await movies.ToListAsync()
             };
 
@@ -58,8 +75,12 @@ namespace MvcMovie.Controllers
                 return NotFound();
             }
 
+            // Get the Movie
             var movie = await _context.Movie
                 .FirstOrDefaultAsync(m => m.Id == id);
+            // Get the Genre
+            movie.Genre = await _context.Genre
+                .FirstOrDefaultAsync(g => g.GenreId == movie.GenreId);
             if (movie == null)
             {
                 return NotFound();
@@ -71,6 +92,9 @@ namespace MvcMovie.Controllers
         // GET: Movies/Create
         public IActionResult Create()
         {
+            // Get the genres to put in the select list
+            ViewData["GenreId"] = new SelectList(_context.Set<Genre>(), "GenreId", "GenreName");
+
             return View();
         }
 
@@ -79,7 +103,7 @@ namespace MvcMovie.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Title,ReleaseDate,Genre,Price,Rating")] Movie movie)
+        public async Task<IActionResult> Create([Bind("Id,Title,ReleaseDate,GenreId,Price,Rating,ImageUrl")] Movie movie)
         {
             if (ModelState.IsValid)
             {
@@ -93,6 +117,9 @@ namespace MvcMovie.Controllers
         // GET: Movies/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
+            // Get the genres to put in the select list
+            ViewData["GenreId"] = new SelectList(_context.Set<Genre>(), "GenreId", "GenreName");
+
             if (id == null)
             {
                 return NotFound();
@@ -111,7 +138,7 @@ namespace MvcMovie.Controllers
         // more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,ReleaseDate,Genre,Price,Rating")] Movie movie)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,ReleaseDate,GenreId,Price,Rating,ImageUrl")] Movie movie)
         {
             if (id != movie.Id)
             {
@@ -149,8 +176,13 @@ namespace MvcMovie.Controllers
                 return NotFound();
             }
 
+            // Get the Movie
             var movie = await _context.Movie
                 .FirstOrDefaultAsync(m => m.Id == id);
+            // Get the Genre
+            movie.Genre = await _context.Genre
+                .FirstOrDefaultAsync(g => g.GenreId == movie.GenreId);
+
             if (movie == null)
             {
                 return NotFound();
